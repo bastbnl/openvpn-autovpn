@@ -77,12 +77,14 @@ $Action = New-ScheduledTaskAction -Execute $PowershellPath -Argument "-WindowSty
 # we will provide an XML file and use Register-ScheduledTask -Xml.
 # That is robust.
 
+$UserAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+
 $TaskXML = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Date>2023-10-25T14:46:00</Date>
-    <Author>$env:USERNAME</Author>
+    <Author>$UserAccount</Author>
     <Description>AutoVPN Automation</Description>
   </RegistrationInfo>
   <Triggers>
@@ -96,7 +98,7 @@ $TaskXML = @"
   </Triggers>
   <Principals>
     <Principal id="Author">
-      <UserId>$env:USERNAME</UserId>
+      <UserId>$UserAccount</UserId>
       <LogonType>InteractiveToken</LogonType>
       <RunLevel>LeastPrivilege</RunLevel>
     </Principal>
