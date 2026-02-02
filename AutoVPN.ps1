@@ -32,7 +32,6 @@ $EventSource = "OpenVPN-AutoVPN"
 $TrustedSpecificSSIDs = @("MySecretHomeWiFi") # Optional: specific SSIDs to always trust even if Public
 
 # --- FUNCTIONS ---
-
 function Get-TriggerReason {
     param ($TriggerCode)
     
