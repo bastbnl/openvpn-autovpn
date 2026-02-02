@@ -13,20 +13,38 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     THE SOFTWARE.
+
+    
+    Automates OpenVPN connection based on Windows Network Category (Public vs Private)
+
 #>
-# AutoVPN.ps1
-# Automates OpenVPN connection based on Windows Network Category (Public vs Private)
-# Author: Antigravity
-# Version: 1.0
+
+# --- PARAMETERS ---
+param (
+    [string]$Trigger = "Manual"
+)
 
 # --- CONFIGURATION ---
 $OpenVPNPath = "C:\Program Files\OpenVPN\bin\openvpn-gui.exe"
 $OvnConfigName = "openvpn.pretty-private.ovpn" # CHANGE THIS to your actual config name
-$LogFile = "$PSScriptRoot\vpn_automation.log"
+$LogFile = "$PSScriptRoot\AutoVPN.log"
 $EventSource = "OpenVPN-AutoVPN"
 $TrustedSpecificSSIDs = @("MySecretHomeWiFi") # Optional: specific SSIDs to always trust even if Public
 
 # --- FUNCTIONS ---
+
+function Get-TriggerReason {
+    param ($TriggerCode)
+    
+    switch -Regex ($TriggerCode) {
+        "^Event-10000$" { return "Network Connected" }
+        "^Event-1$" { return "System Wake" }
+        "^Event-7036$" { return "OpenVPN Service Started" }
+        "^Logon$" { return "User Logon" }
+        "^Manual$" { return "Manual Execution" }
+        Default { return $TriggerCode }
+    }
+}
 
 function Write-Log {
     param (
@@ -83,7 +101,7 @@ function Manage-VPN {
 
     if (-not $PhysicalProfiles) {
         Write-Log "No active physical network connection found." "Warning"
-        return
+        return $false # Retry needed
     }
 
     foreach ($p in $PhysicalProfiles) {
@@ -94,7 +112,7 @@ function Manage-VPN {
             }
             else {
                 $NeedsVPN = $true
-                $Reason = "Network [$($p.Name)] in network category $($p.NetworkCategory)) is not a Trusted network."
+                $Reason = "Network [$($p.Name)] in network category $($p.NetworkCategory) is not a Trusted network."
                 break # Found one unsafe network, so we need VPN
             }
         }
@@ -108,9 +126,11 @@ function Manage-VPN {
             # Start OpenVPN
             # --command connect requires the config file to be in the config dir
             Start-Process -FilePath $OpenVPNPath -ArgumentList "--command connect `"$OvnConfigName`"" -WindowStyle Hidden
+            return $false # Verify next loop
         }
         else {
             Write-Log "VPN is already connected on untrusted network [$($p.Name)]."
+            return $true # Compliant
         }
     }
     else {
@@ -118,18 +138,66 @@ function Manage-VPN {
         if ($IsConnected) {
             Write-Log "ACTION: Disconnecting VPN. Reason: All active networks are Trusted (Private/Domain)."
             Start-Process -FilePath $OpenVPNPath -ArgumentList "--command disconnect `"$OvnConfigName`"" -WindowStyle Hidden
+            return $false # Verify next loop
         }
         else {
             Write-Log "Safe on trusted network [$($p.Name)]. VPN is disconnected."
+            return $true # Compliant
         }
     }
 }
 
 # --- MAIN ---
-Write-Log "--- AutoVPN Check Started ---"
-try {
-    Manage-VPN
+$MutexName = "Global\OpenVPN-AutoVPN-Instance"
+$Mutex = New-Object System.Threading.Mutex($false, $MutexName)
+
+# Try to acquire the mutex (wait 0ms)
+if (-not $Mutex.WaitOne(0, $false)) {
+    # Could not acquire mutex, meaning another instance is running
+    # We might want to log this to a separate file or just exit silently/quietly to avoid log spam
+    # But user asked for it, so let's log it.
+    
+    # We can't use Write-Log nicely if we want to be super fast, but we have the function.
+    # Let's just use Write-Log.
+    # Note: If multiple triggers happen instantly, log might get messy, but mutex protects the logic.
+    Write-Log "Skipped: Another instance is already running [Trigger: $Trigger]" "Warning"
+    exit
 }
-catch {
-    Write-Log "Critical Error: $_" "Error"
+
+try {
+    $ReasonReadable = Get-TriggerReason $Trigger
+    Write-Log "--- AutoVPN Check Started [Trigger: $ReasonReadable] ---"
+
+    # We will loop for a certain period (e.g., 2 minutes) to catch delayed startups of OpenVPN or Wifi
+    # 12 checks * 10 seconds = 120 seconds
+    $MaxRetries = 12
+    $RetryInterval = 10
+
+    for ($i = 0; $i -lt $MaxRetries; $i++) {
+        try {
+            Write-Log "Check cycle $($i + 1)/$MaxRetries..."
+            $IsStable = Manage-VPN
+        
+            if ($IsStable) {
+                Write-Log "State is compliant. Stopping checks."
+                break
+            }
+        }
+        catch {
+            Write-Log "Critical Error: $_" "Error"
+        }
+
+        # If we are at the last iteration, don't sleep
+        if ($i -lt ($MaxRetries - 1)) {
+            Start-Sleep -Seconds $RetryInterval
+        }
+    }
+
+    Write-Log "--- AutoVPN Check Finished ---"
+}
+finally {
+    if ($Mutex) {
+        $Mutex.ReleaseMutex()
+        $Mutex.Dispose()
+    }
 }
