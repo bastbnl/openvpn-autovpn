@@ -200,3 +200,5 @@ finally {
         $Mutex.Dispose()
     }
 }
+
+exit

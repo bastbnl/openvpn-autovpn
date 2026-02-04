@@ -129,7 +129,7 @@ $TaskXmlLogon = @"
     </IdleSettings>
     <AllowStartOnDemand>true</AllowStartOnDemand>
     <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
+    <Hidden>true</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
     <WakeToRun>false</WakeToRun>
     <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
@@ -197,7 +197,7 @@ $TaskXmlEvent = @"
     </IdleSettings>
     <AllowStartOnDemand>true</AllowStartOnDemand>
     <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
+    <Hidden>true</Hidden>
     <RunOnlyIfIdle>false</RunOnlyIfIdle>
     <WakeToRun>false</WakeToRun>
     <ExecutionTimeLimit>PT1H</ExecutionTimeLimit>
@@ -233,5 +233,7 @@ function Register-MyTask {
 Register-MyTask -Name "$TaskName-Logon" -XmlContent $TaskXmlLogon
 Register-MyTask -Name "$TaskName-Event" -XmlContent $TaskXmlEvent
 
-Write-Host "`nSetup Complete!" -ForegroundColor Gray
+Write-Host "$([char]0x2705) Setup Complete!" -ForegroundColor Gray
 Write-Host "Please check Task Scheduler to verify '$TaskName-Logon' and '$TaskName-Event' are present."
+
+exit
