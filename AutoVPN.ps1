@@ -37,12 +37,11 @@ $script:ActionTakenCount = 0
 # --- FUNCTIONS ---
 function Test-IsVPNAdapter {
     param([PSObject]$Adapter)
+    # This script is strictly for OpenVPN/TAP management. 
+    # Other VPNs (WireGuard, Tailscale) are ignored by the management logic.
     $Desc = $Adapter.InterfaceDescription
     return ($Desc -like "*TAP-Windows*" -or 
-            $Desc -like "*OpenVPN*" -or 
-            $Desc -like "*Wintun*" -or 
-            $Desc -like "*WireGuard*" -or
-            $Desc -like "*Tailscale*")
+            $Desc -like "*OpenVPN*")
 }
 
 function Test-IsPhysicalAdapter {
@@ -56,13 +55,17 @@ function Test-IsPhysicalAdapter {
     $Desc = $Adapter.InterfaceDescription
 
     # 2. Broad exclusion of virtual/software/known noise
-    # We use very specific substrings to avoid catching real hardware
+    # We use very specific substrings to avoid catching real hardware.
+    # We include other VPN types here (WireGuard, Wintun) to ensure they are never physical.
     if ($Desc -like "*Virtual*" -or 
         $Desc -like "*Bluetooth*" -or 
         $Desc -like "*Wi-Fi Direct*" -or 
         $Desc -like "*Miniport*" -or 
         $Desc -like "*Pseudo*" -or
-        $Desc -like "*Software*") {
+        $Desc -like "*Software*" -or
+        $Desc -like "*WireGuard*" -or
+        $Desc -like "*Tailscale*" -or
+        $Desc -like "*Wintun*") {
         return $false
     }
 
