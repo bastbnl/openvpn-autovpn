@@ -117,7 +117,7 @@ $TaskXmlLogon = @"
     </Principal>
   </Principals>
   <Settings>
-    <MultipleInstancesPolicy>Queue</MultipleInstancesPolicy>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <AllowHardTerminate>true</AllowHardTerminate>
@@ -185,7 +185,7 @@ $TaskXmlEvent = @"
     </Principal>
   </Principals>
   <Settings>
-    <MultipleInstancesPolicy>Queue</MultipleInstancesPolicy>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <AllowHardTerminate>true</AllowHardTerminate>
@@ -221,19 +221,28 @@ function Register-MyTask {
   try {
     Register-ScheduledTask -TaskName $Name -Xml (Get-Content $XmlPath -Raw) -Force -ErrorAction Stop | Out-Null
     Write-Host "$([char]0x2705) Task [$Name] registered successfully." -ForegroundColor Green
+    return $true
   }
   catch {
     Write-Host "$([char]0x274C) Could not register task [$Name]. Error: $_" -ForegroundColor Red
+    return $false
   }
-    
-  # Clean up temp xml
-  Remove-Item $XmlPath -ErrorAction SilentlyContinue
+  finally {
+    # Clean up temp xml
+    Remove-Item $XmlPath -ErrorAction SilentlyContinue
+  }
 }
 
-Register-MyTask -Name "$TaskName-Logon" -XmlContent $TaskXmlLogon
-Register-MyTask -Name "$TaskName-Event" -XmlContent $TaskXmlEvent
+$SuccessLogon = Register-MyTask -Name "$TaskName-Logon" -XmlContent $TaskXmlLogon
+$SuccessEvent = Register-MyTask -Name "$TaskName-Event" -XmlContent $TaskXmlEvent
 
-Write-Host "$([char]0x2705) Setup Complete!" -ForegroundColor Gray
-Write-Host "Please check Task Scheduler to verify '$TaskName-Logon' and '$TaskName-Event' are present."
+if ($SuccessLogon -and $SuccessEvent) {
+  Write-Host "$([char]0x2705) Setup Complete!" -ForegroundColor Green
+  Write-Host "Please check Task Scheduler to verify '$TaskName-Logon' and '$TaskName-Event' are present."
+}
+else {
+  Write-Host "$([char]0x274C) Setup Failed for one or more tasks." -ForegroundColor Red
+  Write-Host "Please run this script as Administrator to ensure tasks can be registered."
+}
 
 exit
